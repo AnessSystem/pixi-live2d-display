@@ -103,6 +103,19 @@ export default defineConfig(({ command, mode }) => {
             browser: {
                 enabled: true,
                 name: "chrome",
+                headless: process.env.CI === "true",
+                providerOptions: {
+                    capabilities: {
+                        "goog:chromeOptions": {
+                            args: [
+                                "--autoplay-policy=no-user-gesture-required",
+                                "--disable-dev-shm-usage",
+                                "--no-sandbox",
+                                "--enable-unsafe-swiftshader",
+                            ],
+                        },
+                    },
+                },
                 slowHijackESM: false,
             },
             setupFiles: ["./test/setup.ts"],

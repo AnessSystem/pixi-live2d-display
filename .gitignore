@@ -13,6 +13,7 @@ core
 
 .DS_Store
 node_modules
+/.tools/
 
 # TypeScript
 *.tsbuildinfo

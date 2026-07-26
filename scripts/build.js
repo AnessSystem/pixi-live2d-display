@@ -17,10 +17,14 @@ const profiles = entries.flatMap(({ entry, name }) =>
             emptyOutDir: false,
             minify: minify && "terser",
             lib: {
-                formats: minify ? ["umd"] : ["es", "umd"],
+                formats: minify ? ["umd"] : ["es", "cjs", "umd"],
                 entry: resolve(__dirname, "..", entry),
-                fileName: (format) =>
-                    `${name}${format === "umd" ? (minify ? ".min" : "") : "." + format}.js`,
+                fileName: (format) => {
+                    if (format === "es") return `${name}.es.js`;
+                    if (format === "cjs") return `${name}.cjs`;
+
+                    return `${name}${minify ? ".min" : ""}.js`;
+                },
             },
         },
     })),
