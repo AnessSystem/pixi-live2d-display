@@ -31,6 +31,8 @@ export default defineConfig(({ command, mode }) => {
             __DEV__: isDev,
             __VERSION__: JSON.stringify(packageJson.version),
 
+            "process.env.NODE_ENV": JSON.stringify(isDev ? "development" : "production"),
+
             // test env
             __HEADLESS__: process.env.CI === "true",
         },

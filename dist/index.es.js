@@ -4057,8 +4057,8 @@ var LogLevel = /* @__PURE__ */ ((LogLevel2) => {
   LogLevel2[LogLevel2["LogLevel_Off"] = 5] = "LogLevel_Off";
   return LogLevel2;
 })(LogLevel || {});
-const CSM_ASSERT = process.env.NODE_ENV === "production" ? () => {
-} : (expr) => console.assert(expr);
+const CSM_ASSERT = () => {
+};
 function CubismLogDebug(fmt, ...args) {
   CubismDebug.print(LogLevel.LogLevel_Debug, "[CSM][D]" + fmt + "\n", args);
 }
@@ -4163,7 +4163,6 @@ class ACubismMotion {
     );
     fadeWeight = fadeWeight * fadeIn * fadeOut;
     motionQueueEntry.setState(userTimeSeconds, fadeWeight);
-    CSM_ASSERT(0 <= fadeWeight && fadeWeight <= 1);
     this.doUpdateParameters(
       model,
       userTimeSeconds,
@@ -5558,10 +5557,6 @@ class CubismMotion extends ACubismMotion {
             );
             totalPointCount += 1;
             segmentPosition += 3;
-            break;
-          }
-          default: {
-            CSM_ASSERT(0);
             break;
           }
         }

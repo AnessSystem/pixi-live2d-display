@@ -1478,8 +1478,8 @@ var __async = (__this, __arguments, generator) => {
     LogLevel2[LogLevel2["LogLevel_Off"] = 5] = "LogLevel_Off";
     return LogLevel2;
   })(LogLevel || {});
-  const CSM_ASSERT = process.env.NODE_ENV === "production" ? () => {
-  } : (expr) => console.assert(expr);
+  const CSM_ASSERT = () => {
+  };
   function CubismLogVerbose(fmt, ...args) {
     CubismDebug.print(LogLevel.LogLevel_Verbose, "[CSM][V]" + fmt + "\n", args);
   }
@@ -2937,7 +2937,6 @@ var __async = (__this, __arguments, generator) => {
       );
       fadeWeight = fadeWeight * fadeIn * fadeOut;
       motionQueueEntry.setState(userTimeSeconds, fadeWeight);
-      CSM_ASSERT(0 <= fadeWeight && fadeWeight <= 1);
       this.doUpdateParameters(
         model,
         userTimeSeconds,
@@ -3946,10 +3945,6 @@ var __async = (__this, __arguments, generator) => {
               );
               totalPointCount += 1;
               segmentPosition += 3;
-              break;
-            }
-            default: {
-              CSM_ASSERT(0);
               break;
             }
           }
