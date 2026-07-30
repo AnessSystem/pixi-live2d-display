@@ -834,6 +834,8 @@ class MotionManager extends utils.EventEmitter {
      * Maintains the state of this MotionManager.
      */
     __publicField(this, "state", new MotionState());
+    __publicField(this, "states", {});
+    __publicField(this, "parallelMotions", false);
     /**
      * Audio element of the current motion if a sound file is defined with it.
      */
@@ -849,6 +851,12 @@ class MotionManager extends utils.EventEmitter {
     this.settings = settings;
     this.tag = `MotionManager(${settings.name})`;
     this.state.tag = this.tag;
+  }
+  getState(group) {
+    var _a, _b;
+    if (!this.parallelMotions || group === this.groups.idle)
+      return this.state;
+    return (_b = (_a = this.states)[group]) != null ? _b : _a[group] = Object.assign(new MotionState(), { tag: this.tag });
   }
   /**
    * Should be called in the constructor of derived class.
@@ -938,7 +946,8 @@ class MotionManager extends utils.EventEmitter {
   startMotion(_0, _1) {
     return __async(this, arguments, function* (group, index, priority = MotionPriority.NORMAL) {
       var _a;
-      if (!this.state.reserve(group, index, priority)) {
+      const state = this.getState(group);
+      if (!state.reserve(group, index, priority)) {
         return false;
       }
       const definition = (_a = this.definitions[group]) == null ? void 0 : _a[index];
@@ -973,7 +982,12 @@ class MotionManager extends utils.EventEmitter {
           yield readyToPlay;
         }
       }
-      if (!this.state.start(motion, group, index, priority)) {
+      const started = state.start(motion, group, index, priority);
+      if (!started || priority === MotionPriority.IDLE && Object.values(this.states).some(
+        (state2) => state2.currentPriority !== MotionPriority.NONE
+      )) {
+        if (started)
+          state.complete();
         if (audio) {
           SoundManager.dispose(audio);
           this.currentAudio = void 0;
@@ -982,7 +996,7 @@ class MotionManager extends utils.EventEmitter {
       }
       logger.log(this.tag, "Start motion:", this.getMotionName(definition));
       this.emit("motionStart", group, index, audio);
-      if (this.state.shouldOverrideExpression()) {
+      if (state.shouldOverrideExpression()) {
         this.expressionManager && this.expressionManager.resetExpression();
       }
       this.playing = true;
@@ -1002,7 +1016,7 @@ class MotionManager extends utils.EventEmitter {
       if (groupDefs == null ? void 0 : groupDefs.length) {
         const availableIndices = [];
         for (let i = 0; i < groupDefs.length; i++) {
-          if (this.motionGroups[group][i] !== null && !this.state.isActive(group, i)) {
+          if (this.motionGroups[group][i] !== null && !this.getState(group).isActive(group, i)) {
             availableIndices.push(i);
           }
         }
@@ -1020,6 +1034,7 @@ class MotionManager extends utils.EventEmitter {
   stopAllMotions() {
     this._stopAllMotions();
     this.state.reset();
+    Object.values(this.states).forEach((state) => state.reset());
     if (this.currentAudio) {
       SoundManager.dispose(this.currentAudio);
       this.currentAudio = void 0;
@@ -1042,6 +1057,7 @@ class MotionManager extends utils.EventEmitter {
         (_a = this.expressionManager) == null ? void 0 : _a.restoreExpression();
       }
       this.state.complete();
+      Object.values(this.states).forEach((state) => state.complete());
       if (this.state.shouldRequestIdleMotion()) {
         this.startRandomMotion(this.groups.idle, MotionPriority.IDLE);
       }
@@ -5657,10 +5673,12 @@ class Cubism4MotionManager extends MotionManager {
   constructor(settings, options) {
     var _a;
     super(settings, options);
+    __publicField(this, "parallelMotions", true);
     __publicField(this, "definitions");
     __publicField(this, "groups", { idle: "Idle" });
     __publicField(this, "motionDataType", "json");
     __publicField(this, "queueManager", new CubismMotionQueueManager());
+    __publicField(this, "queueManagers", [this.queueManager]);
     __publicField(this, "expressionManager");
     __publicField(this, "eyeBlinkIds");
     __publicField(this, "lipSyncIds");
@@ -5674,20 +5692,36 @@ class Cubism4MotionManager extends MotionManager {
     if (this.settings.expressions) {
       this.expressionManager = new Cubism4ExpressionManager(this.settings, options);
     }
-    this.queueManager.setEventCallback((caller, eventValue, customData) => {
+    this.setupQueueManager(this.queueManager);
+  }
+  setupQueueManager(manager) {
+    manager.setEventCallback((caller, eventValue, customData) => {
       this.emit("motion:" + eventValue);
     });
+    return manager;
   }
   isFinished() {
-    return this.queueManager.isFinished();
+    return this.queueManagers.every((manager) => manager.isFinished());
   }
   _startMotion(motion, onFinish) {
+    var _a, _b;
     motion.setFinishedMotionHandler(onFinish);
-    this.queueManager.stopAllMotions();
-    return this.queueManager.startMotion(motion, false, performance.now());
+    const curves = motion._motionData.curves;
+    const managers = this.queueManagers.filter(
+      (manager2) => manager2._motions.some(
+        (entry) => entry._motion._motionData.curves.some(
+          (a) => curves.some((b) => a.type === b.type && a.id === b.id)
+        )
+      )
+    );
+    managers.forEach((manager2) => manager2.stopAllMotions());
+    const manager = (_b = (_a = managers[0]) != null ? _a : this.queueManagers.find((manager2) => manager2.isFinished())) != null ? _b : this.setupQueueManager(new CubismMotionQueueManager());
+    if (!this.queueManagers.includes(manager))
+      this.queueManagers.push(manager);
+    return manager.startMotion(motion, false, performance.now());
   }
   _stopAllMotions() {
-    this.queueManager.stopAllMotions();
+    this.queueManagers.forEach((manager) => manager.stopAllMotions());
   }
   createMotion(data, group, definition) {
     const motion = CubismMotion.create(data);
@@ -5716,11 +5750,21 @@ class Cubism4MotionManager extends MotionManager {
     return definition.Sound;
   }
   updateParameters(model, now) {
-    return this.queueManager.doUpdateMotion(model, now);
+    const updated = this.queueManagers.map((manager) => manager.doUpdateMotion(model, now)).some(Boolean);
+    for (const [group, motions] of Object.entries(this.motionGroups)) {
+      if (!this.queueManagers.some(
+        (manager) => manager._motions.some(
+          (entry) => motions == null ? void 0 : motions.includes(entry._motion)
+        )
+      )) {
+        this.getState(group).complete();
+      }
+    }
+    return updated;
   }
   destroy() {
     super.destroy();
-    this.queueManager.release();
+    this.queueManagers.forEach((manager) => manager.release());
     this.queueManager = void 0;
   }
 }
