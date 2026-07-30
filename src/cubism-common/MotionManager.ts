@@ -86,6 +86,10 @@ export abstract class MotionManager<Motion = any, MotionSpec = any> extends util
      */
     state = new MotionState();
 
+    protected states: Record<string, MotionState> = {};
+
+    protected parallelMotions = false;
+
     /**
      * Audio element of the current motion if a sound file is defined with it.
      */
@@ -106,6 +110,12 @@ export abstract class MotionManager<Motion = any, MotionSpec = any> extends util
         this.settings = settings;
         this.tag = `MotionManager(${settings.name})`;
         this.state.tag = this.tag;
+    }
+
+    protected getState(group: string): MotionState {
+        if (!this.parallelMotions || group === this.groups.idle) return this.state;
+
+        return (this.states[group] ??= Object.assign(new MotionState(), { tag: this.tag }));
     }
 
     /**
@@ -214,7 +224,9 @@ export abstract class MotionManager<Motion = any, MotionSpec = any> extends util
         index: number,
         priority = MotionPriority.NORMAL,
     ): Promise<boolean> {
-        if (!this.state.reserve(group, index, priority)) {
+        const state = this.getState(group);
+
+        if (!state.reserve(group, index, priority)) {
             return false;
         }
 
@@ -263,7 +275,13 @@ export abstract class MotionManager<Motion = any, MotionSpec = any> extends util
             }
         }
 
-        if (!this.state.start(motion, group, index, priority)) {
+        const started = state.start(motion, group, index, priority);
+
+        if (!started || (priority === MotionPriority.IDLE && Object.values(this.states).some((state) => state.currentPriority !== MotionPriority.NONE))) {
+            if (started) {
+                state.complete();
+            }
+
             if (audio) {
                 SoundManager.dispose(audio);
                 this.currentAudio = undefined;
@@ -276,7 +294,7 @@ export abstract class MotionManager<Motion = any, MotionSpec = any> extends util
 
         this.emit("motionStart", group, index, audio);
 
-        if (this.state.shouldOverrideExpression()) {
+        if (state.shouldOverrideExpression()) {
             this.expressionManager && this.expressionManager.resetExpression();
         }
 
@@ -300,7 +318,7 @@ export abstract class MotionManager<Motion = any, MotionSpec = any> extends util
             const availableIndices = [];
 
             for (let i = 0; i < groupDefs!.length; i++) {
-                if (this.motionGroups[group]![i] !== null && !this.state.isActive(group, i)) {
+                if (this.motionGroups[group]![i] !== null && !this.getState(group).isActive(group, i)) {
                     availableIndices.push(i);
                 }
             }
@@ -322,6 +340,7 @@ export abstract class MotionManager<Motion = any, MotionSpec = any> extends util
         this._stopAllMotions();
 
         this.state.reset();
+        Object.values(this.states).forEach((state) => state.reset());
 
         if (this.currentAudio) {
             SoundManager.dispose(this.currentAudio);
@@ -347,6 +366,7 @@ export abstract class MotionManager<Motion = any, MotionSpec = any> extends util
             }
 
             this.state.complete();
+            Object.values(this.states).forEach((state) => state.complete());
 
             if (this.state.shouldRequestIdleMotion()) {
                 // noinspection JSIgnoredPromiseFromCall

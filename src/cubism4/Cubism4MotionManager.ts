@@ -12,6 +12,8 @@ import { CubismMotionQueueManager } from "@cubism/motion/cubismmotionqueuemanage
 import type { Mutable } from "../types/helpers";
 
 export class Cubism4MotionManager extends MotionManager<CubismMotion, CubismSpec.Motion> {
+    protected parallelMotions = true;
+
     readonly definitions: Partial<Record<string, CubismSpec.Motion[]>>;
 
     readonly groups = { idle: "Idle" } as const;
@@ -19,6 +21,8 @@ export class Cubism4MotionManager extends MotionManager<CubismMotion, CubismSpec
     readonly motionDataType = "json";
 
     readonly queueManager = new CubismMotionQueueManager();
+
+    protected readonly queueManagers = [this.queueManager];
 
     declare readonly settings: Cubism4ModelSettings;
 
@@ -44,13 +48,19 @@ export class Cubism4MotionManager extends MotionManager<CubismMotion, CubismSpec
             this.expressionManager = new Cubism4ExpressionManager(this.settings, options);
         }
 
-        this.queueManager.setEventCallback((caller, eventValue, customData) => {
+        this.setupQueueManager(this.queueManager);
+    }
+
+    protected setupQueueManager(manager: CubismMotionQueueManager) {
+        manager.setEventCallback((caller, eventValue, customData) => {
             this.emit("motion:" + eventValue);
         });
+
+        return manager;
     }
 
     isFinished(): boolean {
-        return this.queueManager.isFinished();
+        return this.queueManagers.every((manager) => manager.isFinished());
     }
 
     protected _startMotion(
@@ -59,13 +69,31 @@ export class Cubism4MotionManager extends MotionManager<CubismMotion, CubismSpec
     ): number {
         motion.setFinishedMotionHandler(onFinish as (motion: ACubismMotion) => void);
 
-        this.queueManager.stopAllMotions();
+        const curves = motion._motionData.curves;
+        const managers = this.queueManagers.filter((manager) =>
+            manager._motions.some((entry) =>
+                (entry._motion as CubismMotion)._motionData.curves.some((a) =>
+                    curves.some((b) => a.type === b.type && a.id === b.id),
+                ),
+            ),
+        );
 
-        return this.queueManager.startMotion(motion, false, performance.now());
+        managers.forEach((manager) => manager.stopAllMotions());
+
+        const manager =
+            managers[0] ??
+            this.queueManagers.find((manager) => manager.isFinished()) ??
+            this.setupQueueManager(new CubismMotionQueueManager());
+
+        if (!this.queueManagers.includes(manager)) {
+            this.queueManagers.push(manager);
+        }
+
+        return manager.startMotion(motion, false, performance.now());
     }
 
     protected _stopAllMotions(): void {
-        this.queueManager.stopAllMotions();
+        this.queueManagers.forEach((manager) => manager.stopAllMotions());
     }
 
     createMotion(data: object, group: string, definition: CubismSpec.Motion): CubismMotion {
@@ -110,13 +138,21 @@ export class Cubism4MotionManager extends MotionManager<CubismMotion, CubismSpec
     }
 
     protected updateParameters(model: CubismModel, now: DOMHighResTimeStamp): boolean {
-        return this.queueManager.doUpdateMotion(model, now);
+        const updated = this.queueManagers.map((manager) => manager.doUpdateMotion(model, now)).some(Boolean);
+
+        for (const [group, motions] of Object.entries(this.motionGroups)) {
+            if (!this.queueManagers.some((manager) => manager._motions.some((entry) => motions?.includes(entry._motion as CubismMotion)))) {
+                this.getState(group).complete();
+            }
+        }
+
+        return updated;
     }
 
     destroy() {
         super.destroy();
 
-        this.queueManager.release();
+        this.queueManagers.forEach((manager) => manager.release());
         (this as Partial<Mutable<this>>).queueManager = undefined;
     }
 }
