@@ -206,6 +206,25 @@ test("starts a random motion", async ({ manager, assertStartedMotion }) => {
     });
 });
 
+test("start parallel play of motions with different parameters", async ({ manager }) => {
+    const [blink, mouth] = await Promise.all([
+        manager.loadMotion("Idle", 0),
+        manager.loadMotion("Tap", 0),
+    ]);
+
+    blink!._motionData.curves = [
+        blink!._motionData.curves.find((curve) => curve.id === "ParamEyeLOpen")!,
+    ];
+    mouth!._motionData.curves = [
+        mouth!._motionData.curves.find((curve) => curve.id === "ParamMouthOpenY")!,
+    ];
+
+    await expect(manager.startMotion("Idle", 0, MotionPriority.NORMAL)).resolves.toBe(true);
+    await expect(manager.startMotion("Tap", 0, MotionPriority.NORMAL)).resolves.toBe(true);
+
+    expect((manager as any).queueManagers).toHaveLength(2);
+});
+
 test("starts an idle motion when the reserved motion has not yet been loaded", async ({
     loaderMock,
     manager,
