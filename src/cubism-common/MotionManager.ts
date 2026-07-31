@@ -311,10 +311,20 @@ export abstract class MotionManager<Motion = any, MotionSpec = any> extends util
      * @param priority - The priority to be applied.
      * @return Promise that resolves with true if the motion is successfully started, with false otherwise.
      */
-    async startRandomMotion(group: string, priority?: MotionPriority): Promise<boolean> {
+    async startRandomMotion(group: string, priority?: MotionPriority, minDelay?: number, maxDelay?: number): Promise<boolean> {
         const groupDefs = this.definitions[group];
 
         if (groupDefs?.length) {
+            if (minDelay !== undefined && maxDelay !== undefined) {
+                const delay = Math.min(minDelay, maxDelay) + Math.random() * Math.abs(maxDelay - minDelay);
+
+                setTimeout(() => {
+                    if (!this.destroyed) {
+                        void this.startRandomMotion(group, priority, minDelay, maxDelay);
+                    }
+                }, delay);
+            }
+
             const availableIndices = [];
 
             for (let i = 0; i < groupDefs!.length; i++) {
