@@ -8661,11 +8661,10 @@ class MotionManager extends utils.EventEmitter {
         }
       }
       const started = state.start(motion, group, index, priority);
-      if (!started || priority === MotionPriority.IDLE && Object.values(this.states).some(
-        (state2) => state2.currentPriority !== MotionPriority.NONE
-      )) {
-        if (started)
+      if (!started || priority === MotionPriority.IDLE && Object.values(this.states).some((state2) => state2.currentPriority !== MotionPriority.NONE)) {
+        if (started) {
           state.complete();
+        }
         if (audio) {
           SoundManager.dispose(audio);
           this.currentAudio = void 0;
@@ -8688,10 +8687,18 @@ class MotionManager extends utils.EventEmitter {
    * @param priority - The priority to be applied.
    * @return Promise that resolves with true if the motion is successfully started, with false otherwise.
    */
-  startRandomMotion(group, priority) {
+  startRandomMotion(group, priority, minDelay, maxDelay) {
     return __async(this, null, function* () {
       const groupDefs = this.definitions[group];
       if (groupDefs == null ? void 0 : groupDefs.length) {
+        if (minDelay !== void 0 && maxDelay !== void 0) {
+          const delay = Math.min(minDelay, maxDelay) + Math.random() * Math.abs(maxDelay - minDelay);
+          setTimeout(() => {
+            if (!this.destroyed) {
+              void this.startRandomMotion(group, priority, minDelay, maxDelay);
+            }
+          }, delay);
+        }
         const availableIndices = [];
         for (let i = 0; i < groupDefs.length; i++) {
           if (this.motionGroups[group][i] !== null && !this.getState(group).isActive(group, i)) {
@@ -10156,8 +10163,9 @@ class Cubism4MotionManager extends MotionManager {
     );
     managers.forEach((manager2) => manager2.stopAllMotions());
     const manager = (_b = (_a = managers[0]) != null ? _a : this.queueManagers.find((manager2) => manager2.isFinished())) != null ? _b : this.setupQueueManager(new CubismMotionQueueManager());
-    if (!this.queueManagers.includes(manager))
+    if (!this.queueManagers.includes(manager)) {
       this.queueManagers.push(manager);
+    }
     return manager.startMotion(motion, false, performance.now());
   }
   _stopAllMotions() {
@@ -10192,11 +10200,7 @@ class Cubism4MotionManager extends MotionManager {
   updateParameters(model, now) {
     const updated = this.queueManagers.map((manager) => manager.doUpdateMotion(model, now)).some(Boolean);
     for (const [group, motions] of Object.entries(this.motionGroups)) {
-      if (!this.queueManagers.some(
-        (manager) => manager._motions.some(
-          (entry) => motions == null ? void 0 : motions.includes(entry._motion)
-        )
-      )) {
+      if (!this.queueManagers.some((manager) => manager._motions.some((entry) => motions == null ? void 0 : motions.includes(entry._motion)))) {
         this.getState(group).complete();
       }
     }

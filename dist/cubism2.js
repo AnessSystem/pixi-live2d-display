@@ -985,11 +985,10 @@ var __async = (__this, __arguments, generator) => {
           }
         }
         const started = state.start(motion, group, index, priority);
-        if (!started || priority === MotionPriority.IDLE && Object.values(this.states).some(
-          (state2) => state2.currentPriority !== MotionPriority.NONE
-        )) {
-          if (started)
+        if (!started || priority === MotionPriority.IDLE && Object.values(this.states).some((state2) => state2.currentPriority !== MotionPriority.NONE)) {
+          if (started) {
             state.complete();
+          }
           if (audio) {
             SoundManager.dispose(audio);
             this.currentAudio = void 0;
@@ -1012,10 +1011,18 @@ var __async = (__this, __arguments, generator) => {
      * @param priority - The priority to be applied.
      * @return Promise that resolves with true if the motion is successfully started, with false otherwise.
      */
-    startRandomMotion(group, priority) {
+    startRandomMotion(group, priority, minDelay, maxDelay) {
       return __async(this, null, function* () {
         const groupDefs = this.definitions[group];
         if (groupDefs == null ? void 0 : groupDefs.length) {
+          if (minDelay !== void 0 && maxDelay !== void 0) {
+            const delay = Math.min(minDelay, maxDelay) + Math.random() * Math.abs(maxDelay - minDelay);
+            setTimeout(() => {
+              if (!this.destroyed) {
+                void this.startRandomMotion(group, priority, minDelay, maxDelay);
+              }
+            }, delay);
+          }
           const availableIndices = [];
           for (let i = 0; i < groupDefs.length; i++) {
             if (this.motionGroups[group][i] !== null && !this.getState(group).isActive(group, i)) {
