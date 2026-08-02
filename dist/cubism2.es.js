@@ -29,6 +29,144 @@ import { utils, Matrix, Texture, Transform, Point, ObservablePoint } from "@pixi
 import { Container } from "@pixi/display";
 const LOGICAL_WIDTH = 2;
 const LOGICAL_HEIGHT = 2;
+const vowelProfiles = {
+  a: { f1: 850, f2: 1400, open: 1, form: 0 },
+  i: { f1: 300, f2: 2700, open: 0.25, form: 1 },
+  u: { f1: 350, f2: 1500, open: 0.35, form: -1 },
+  e: { f1: 500, f2: 2300, open: 0.5, form: 0.7 },
+  o: { f1: 500, f2: 1e3, open: 0.75, form: -0.7 }
+};
+class AudioAnalyzer {
+  constructor() {
+    __publicField(this, "context");
+    //Web Audio API全体を管理
+    __publicField(this, "source");
+    //音声をWeb Audio APIへ取り込むノード
+    __publicField(this, "analyser");
+    //波形データや周波数データを取得する解析ノード
+    __publicField(this, "samples");
+    //時間内の波形データを格納する配列
+    __publicField(this, "spectrum");
+    //周波数ごとの強度を格納する配列
+    //平滑化された音量、口の開き、口の形、フォルマント周波数
+    __publicField(this, "volume", 0);
+    __publicField(this, "mouthOpen", 0);
+    __publicField(this, "mouthForm", 0);
+    __publicField(this, "f1", 0);
+    __publicField(this, "f2", 0);
+  }
+  start(audio) {
+    this.stop();
+    const context = new AudioContext();
+    const source = context.createMediaElementSource(audio);
+    const analyser = context.createAnalyser();
+    analyser.fftSize = 2048;
+    analyser.smoothingTimeConstant = 0.5;
+    source.connect(analyser);
+    analyser.connect(context.destination);
+    this.context = context;
+    this.source = source;
+    this.analyser = analyser;
+    this.samples = new Uint8Array(analyser.fftSize);
+    this.spectrum = new Uint8Array(analyser.frequencyBinCount);
+    this.volume = 0;
+    this.mouthOpen = 0;
+    this.mouthForm = 0;
+    this.f1 = 0;
+    this.f2 = 0;
+    if (context.state === "suspended") {
+      void context.resume().catch(() => void 0);
+    }
+  }
+  //音声の解析
+  update() {
+    var _a, _b;
+    if (!this.context || !this.analyser || !this.samples || !this.spectrum) {
+      return void 0;
+    }
+    this.analyser.getByteTimeDomainData(this.samples);
+    this.analyser.getByteFrequencyData(this.spectrum);
+    let sum = 0;
+    for (const sample of this.samples) {
+      const normalized = (sample - 128) / 128;
+      sum += normalized * normalized;
+    }
+    const rms = Math.sqrt(sum / this.samples.length);
+    const target = Math.max(0, Math.min(1, (rms - 0.01) * 8));
+    this.volume += (target - this.volume) * 0.35;
+    let vowel;
+    if (rms > 0.015) {
+      const binWidth = this.context.sampleRate / this.analyser.fftSize;
+      const nextF1 = this.findPeak(250, 1e3, binWidth);
+      const nextF2 = this.findPeak(Math.max(700, nextF1 + 350), 3200, binWidth);
+      this.f1 += (nextF1 - this.f1) * (this.f1 ? 0.4 : 1);
+      this.f2 += (nextF2 - this.f2) * (this.f2 ? 0.4 : 1);
+      vowel = this.findVowel(this.f1, this.f2);
+    }
+    const shape = vowel ? vowelProfiles[vowel] : void 0;
+    const strength = Math.min(1, this.volume * 2);
+    const targetOpen = ((_a = shape == null ? void 0 : shape.open) != null ? _a : 0) * strength;
+    const targetForm = ((_b = shape == null ? void 0 : shape.form) != null ? _b : 0) * strength;
+    this.mouthOpen += (targetOpen - this.mouthOpen) * 0.35;
+    this.mouthForm += (targetForm - this.mouthForm) * 0.35;
+    return {
+      volume: this.volume,
+      vowel,
+      mouthOpen: this.mouthOpen,
+      mouthForm: this.mouthForm
+    };
+  }
+  findPeak(minHz, maxHz, binWidth) {
+    const spectrum = this.spectrum;
+    const start = Math.max(0, Math.ceil(minHz / binWidth));
+    const end = Math.min(spectrum.length - 1, Math.floor(maxHz / binWidth));
+    const radius = Math.max(1, Math.round(120 / binWidth));
+    let peak = start;
+    let peakEnergy = -1;
+    for (let i = start; i <= end; i++) {
+      let energy = 0;
+      for (let j = Math.max(start, i - radius); j <= Math.min(end, i + radius); j++) {
+        energy += spectrum[j];
+      }
+      if (energy > peakEnergy) {
+        peak = i;
+        peakEnergy = energy;
+      }
+    }
+    return peak * binWidth;
+  }
+  findVowel(f1, f2) {
+    let result = "a";
+    let shortestDistance = Infinity;
+    for (const vowel of Object.keys(vowelProfiles)) {
+      const profile = vowelProfiles[vowel];
+      const distance = __pow(Math.log(f1 / profile.f1), 2) + __pow(Math.log(f2 / profile.f2), 2);
+      if (distance < shortestDistance) {
+        result = vowel;
+        shortestDistance = distance;
+      }
+    }
+    return result;
+  }
+  stop() {
+    var _a, _b;
+    (_a = this.source) == null ? void 0 : _a.disconnect();
+    (_b = this.analyser) == null ? void 0 : _b.disconnect();
+    if (this.context) {
+      void this.context.close().catch(() => void 0);
+    }
+    this.context = void 0;
+    this.source = void 0;
+    this.analyser = void 0;
+    this.samples = void 0;
+    this.spectrum = void 0;
+    this.volume = 0;
+    this.mouthOpen = 0;
+    this.mouthForm = 0;
+    this.f1 = 0;
+    this.f2 = 0;
+  }
+}
 var CubismConfig;
 ((CubismConfig2) => {
   CubismConfig2.supportMoreMaskDivisions = true;
@@ -1091,6 +1229,7 @@ class InternalModel extends utils.EventEmitter {
   constructor() {
     super(...arguments);
     __publicField(this, "focusController", new FocusController());
+    __publicField(this, "audioAnalyzer", new AudioAnalyzer());
     __publicField(this, "pose");
     __publicField(this, "physics");
     /**
@@ -1241,6 +1380,12 @@ class InternalModel extends utils.EventEmitter {
   update(dt, now) {
     this.focusController.update(dt);
   }
+  startLipSync(audio) {
+    this.audioAnalyzer.start(audio);
+  }
+  stopLipSync() {
+    this.audioAnalyzer.stop();
+  }
   /**
    * Destroys the model and all related resources.
    * @emits {@link InternalModelEvents.destroy | destroy}
@@ -1248,6 +1393,7 @@ class InternalModel extends utils.EventEmitter {
   destroy() {
     this.destroyed = true;
     this.emit("destroy");
+    this.audioAnalyzer.stop();
     this.motionManager.destroy();
     this.motionManager = void 0;
   }
@@ -2249,6 +2395,18 @@ class Live2DModel extends Container {
     return Promise.resolve(false);
   }
   /**
+   * Starts real-time lip sync using the volume and vowel of a playing media element.
+   */
+  startLipSync(audio) {
+    this.internalModel.startLipSync(audio);
+  }
+  /**
+   * Stops real-time lip sync.
+   */
+  stopLipSync() {
+    this.internalModel.stopLipSync();
+  }
+  /**
    * Updates the focus position. This will not cause the model to immediately look at the position,
    * instead the movement will be interpolated.
    * @param x - Position in world space.
@@ -2613,6 +2771,8 @@ class Cubism2InternalModel extends InternalModel {
     __publicField(this, "angleZParamIndex");
     __publicField(this, "bodyAngleXParamIndex");
     __publicField(this, "breathParamIndex");
+    __publicField(this, "mouthOpenParamIndex");
+    __publicField(this, "mouthFormParamIndex");
     __publicField(this, "textureFlipY", true);
     /**
      * Number of the drawables in this model.
@@ -2635,6 +2795,8 @@ class Cubism2InternalModel extends InternalModel {
     this.angleZParamIndex = coreModel.getParamIndex("PARAM_ANGLE_Z");
     this.bodyAngleXParamIndex = coreModel.getParamIndex("PARAM_BODY_ANGLE_X");
     this.breathParamIndex = coreModel.getParamIndex("PARAM_BREATH");
+    this.mouthOpenParamIndex = coreModel.getParamIndex("PARAM_MOUTH_OPEN_Y");
+    this.mouthFormParamIndex = coreModel.getParamIndex("PARAM_MOUTH_FORM");
     this.init();
   }
   init() {
@@ -2756,6 +2918,15 @@ class Cubism2InternalModel extends InternalModel {
     }
     this.updateFocus();
     this.updateNaturalMovements(dt, now);
+    const lipSync = this.audioAnalyzer.update();
+    if (lipSync) {
+      if (this.mouthOpenParamIndex >= 0) {
+        model.setParamFloat(this.mouthOpenParamIndex, lipSync.mouthOpen);
+      }
+      if (this.mouthFormParamIndex >= 0) {
+        model.setParamFloat(this.mouthFormParamIndex, lipSync.mouthForm);
+      }
+    }
     (_c = this.physics) == null ? void 0 : _c.update(now);
     (_d = this.pose) == null ? void 0 : _d.update(dt);
     this.emit("beforeModelUpdate");
@@ -3050,6 +3221,7 @@ Live2DFactory.registerRuntime({
   }
 });
 export {
+  AudioAnalyzer,
   Cubism2ExpressionManager,
   Cubism2InternalModel,
   Cubism2ModelSettings,
