@@ -1,4 +1,5 @@
 export * from "./constants";
+export * from "./AudioAnalyzer";
 export * from "./ExpressionManager";
 export * from "./FocusController";
 export * from "./ModelSettings";

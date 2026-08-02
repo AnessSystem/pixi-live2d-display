@@ -1,3 +1,4 @@
+import { AudioAnalyzer } from "@/cubism-common/AudioAnalyzer";
 import { FocusController } from "@/cubism-common/FocusController";
 import type { ModelSettings } from "@/cubism-common/ModelSettings";
 import type { MotionManager, MotionManagerOptions } from "@/cubism-common/MotionManager";
@@ -54,6 +55,8 @@ export abstract class InternalModel extends utils.EventEmitter {
     abstract readonly settings: ModelSettings;
 
     focusController = new FocusController();
+
+    readonly audioAnalyzer = new AudioAnalyzer();
 
     abstract motionManager: MotionManager;
 
@@ -260,6 +263,14 @@ export abstract class InternalModel extends utils.EventEmitter {
         this.focusController.update(dt);
     }
 
+    startLipSync(audio: HTMLMediaElement): void {
+        this.audioAnalyzer.start(audio);
+    }
+
+    stopLipSync(): void {
+        this.audioAnalyzer.stop();
+    }
+
     /**
      * Destroys the model and all related resources.
      * @emits {@link InternalModelEvents.destroy | destroy}
@@ -268,6 +279,7 @@ export abstract class InternalModel extends utils.EventEmitter {
         this.destroyed = true;
         this.emit("destroy");
 
+        this.audioAnalyzer.stop();
         this.motionManager.destroy();
         (this as Partial<this>).motionManager = undefined;
     }

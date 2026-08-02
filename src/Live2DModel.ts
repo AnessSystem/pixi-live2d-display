@@ -180,6 +180,20 @@ export class Live2DModel<IM extends InternalModel = InternalModel> extends Conta
     }
 
     /**
+     * Starts real-time lip sync using the volume and vowel of a playing media element.
+     */
+    startLipSync(audio: HTMLMediaElement): void {
+        this.internalModel.startLipSync(audio);
+    }
+
+    /**
+     * Stops real-time lip sync.
+     */
+    stopLipSync(): void {
+        this.internalModel.stopLipSync();
+    }
+
+    /**
      * Updates the focus position. This will not cause the model to immediately look at the position,
      * instead the movement will be interpolated.
      * @param x - Position in world space.

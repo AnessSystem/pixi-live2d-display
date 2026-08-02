@@ -11,6 +11,8 @@ import {
     ParamBreath,
     ParamEyeBallX,
     ParamEyeBallY,
+    ParamMouthForm,
+    ParamMouthOpenY,
 } from "@cubism/cubismdefaultparameterid";
 import { BreathParameterData, CubismBreath } from "@cubism/effect/cubismbreath";
 import { CubismEyeBlink } from "@cubism/effect/cubismeyeblink";
@@ -29,8 +31,6 @@ export class Cubism4InternalModel extends InternalModel {
     settings: Cubism4ModelSettings;
     coreModel: CubismModel;
     motionManager: Cubism4MotionManager;
-
-    lipSync = true;
 
     breath = CubismBreath.create();
     eyeBlink?: CubismEyeBlink;
@@ -218,14 +218,17 @@ export class Cubism4InternalModel extends InternalModel {
         // revert the timestamps to be milliseconds
         this.updateNaturalMovements(dt * 1000, now * 1000);
 
-        // TODO: Add lip sync API
-        // if (this.lipSync) {
-        //     const value = 0; // 0 ~ 1
-        //
-        //     for (let i = 0; i < this.lipSyncIds.length; ++i) {
-        //         model.addParameterValueById(this.lipSyncIds[i], value, 0.8);
-        //     }
-        // }
+        const lipSync = this.audioAnalyzer.update();
+
+        if (lipSync) {
+            const lipSyncIds = this.motionManager.lipSyncIds.length ? this.motionManager.lipSyncIds : [ParamMouthOpenY];
+
+            for (const id of lipSyncIds) {
+                model.setParameterValueById(id, lipSync.mouthOpen);
+            }
+
+            model.setParameterValueById(ParamMouthForm, lipSync.mouthForm);
+        }
 
         this.physics?.evaluate(model, dt);
         this.pose?.updateParameters(model, dt);
