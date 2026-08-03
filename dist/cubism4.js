@@ -7739,9 +7739,17 @@ var __async = (__this, __arguments, generator) => {
       __publicField(this, "mouthForm", 0);
       __publicField(this, "f1", 0);
       __publicField(this, "f2", 0);
+      __publicField(this, "mouthOpenSpeed", 0.35);
+      __publicField(this, "mouthFormSpeed", 0.35);
+      __publicField(this, "vowelSpeed", 0.4);
+      __publicField(this, "volumeSpeed", 0.35);
     }
-    start(audio) {
+    start(audio, mouthOpenSpeed = 0.35, mouthFormSpeed = 0.35, vowelSpeed = 0.4, volumeSpeed = 0.35) {
       this.stop();
+      this.mouthOpenSpeed = mouthOpenSpeed;
+      this.mouthFormSpeed = mouthFormSpeed;
+      this.vowelSpeed = vowelSpeed;
+      this.volumeSpeed = volumeSpeed;
       const context = new AudioContext();
       const source = context.createMediaElementSource(audio);
       const analyser = context.createAnalyser();
@@ -7763,7 +7771,7 @@ var __async = (__this, __arguments, generator) => {
         void context.resume().catch(() => void 0);
       }
     }
-    //音声の解析
+    //音声の解析処理
     update() {
       var _a, _b;
       if (!this.context || !this.analyser || !this.samples || !this.spectrum) {
@@ -7778,22 +7786,22 @@ var __async = (__this, __arguments, generator) => {
       }
       const rms = Math.sqrt(sum / this.samples.length);
       const target = Math.max(0, Math.min(1, (rms - 0.01) * 8));
-      this.volume += (target - this.volume) * 0.35;
+      this.volume += (target - this.volume) * this.volumeSpeed;
       let vowel;
       if (rms > 0.015) {
         const binWidth = this.context.sampleRate / this.analyser.fftSize;
         const nextF1 = this.findPeak(250, 1e3, binWidth);
         const nextF2 = this.findPeak(Math.max(700, nextF1 + 350), 3200, binWidth);
-        this.f1 += (nextF1 - this.f1) * (this.f1 ? 0.4 : 1);
-        this.f2 += (nextF2 - this.f2) * (this.f2 ? 0.4 : 1);
+        this.f1 += (nextF1 - this.f1) * (this.f1 ? this.vowelSpeed : 1);
+        this.f2 += (nextF2 - this.f2) * (this.f2 ? this.vowelSpeed : 1);
         vowel = this.findVowel(this.f1, this.f2);
       }
       const shape = vowel ? vowelProfiles[vowel] : void 0;
       const strength = Math.min(1, this.volume * 2);
       const targetOpen = ((_a = shape == null ? void 0 : shape.open) != null ? _a : 0) * strength;
       const targetForm = ((_b = shape == null ? void 0 : shape.form) != null ? _b : 0) * strength;
-      this.mouthOpen += (targetOpen - this.mouthOpen) * 0.35;
-      this.mouthForm += (targetForm - this.mouthForm) * 0.35;
+      this.mouthOpen += (targetOpen - this.mouthOpen) * this.mouthOpenSpeed;
+      this.mouthForm += (targetForm - this.mouthForm) * this.mouthFormSpeed;
       return {
         volume: this.volume,
         vowel,
@@ -7801,6 +7809,7 @@ var __async = (__this, __arguments, generator) => {
         mouthForm: this.mouthForm
       };
     }
+    //音声スペクトルからF1・F2候補となる強い周波数を探す処理
     findPeak(minHz, maxHz, binWidth) {
       const spectrum = this.spectrum;
       const start = Math.max(0, Math.ceil(minHz / binWidth));
@@ -7820,6 +7829,7 @@ var __async = (__this, __arguments, generator) => {
       }
       return peak * binWidth;
     }
+    //F1・F2を基準値と比較し「あ・い・う・え・お」の母音を決める処理
     findVowel(f1, f2) {
       let result = "a";
       let shortestDistance = Infinity;
@@ -7833,6 +7843,7 @@ var __async = (__this, __arguments, generator) => {
       }
       return result;
     }
+    //音声解析を停止し、使用していたリソースと状態を初期化
     stop() {
       var _a, _b;
       (_a = this.source) == null ? void 0 : _a.disconnect();
@@ -7892,7 +7903,7 @@ var __async = (__this, __arguments, generator) => {
     preserveExpressionOnMotion: true,
     cubism4: exports2.CubismConfig
   };
-  const VERSION = "v0.5.0-beta";
+  const VERSION = "v0.6.0-beta.1";
   const logger = {
     log(tag, ...messages) {
       if (config.logLevel <= config.LOG_LEVEL_VERBOSE) {
@@ -9060,8 +9071,8 @@ var __async = (__this, __arguments, generator) => {
     update(dt, now) {
       this.focusController.update(dt);
     }
-    startLipSync(audio) {
-      this.audioAnalyzer.start(audio);
+    startLipSync(audio, mouthOpenSpeed, mouthFormSpeed, vowelSpeed, volumeSpeed) {
+      this.audioAnalyzer.start(audio, mouthOpenSpeed, mouthFormSpeed, vowelSpeed, volumeSpeed);
     }
     stopLipSync() {
       this.audioAnalyzer.stop();
@@ -10077,8 +10088,8 @@ var __async = (__this, __arguments, generator) => {
     /**
      * Starts real-time lip sync using the volume and vowel of a playing media element.
      */
-    startLipSync(audio) {
-      this.internalModel.startLipSync(audio);
+    startLipSync(audio, mouthOpenSpeed, mouthFormSpeed, vowelSpeed, volumeSpeed) {
+      this.internalModel.startLipSync(audio, mouthOpenSpeed, mouthFormSpeed, vowelSpeed, volumeSpeed);
     }
     /**
      * Stops real-time lip sync.
