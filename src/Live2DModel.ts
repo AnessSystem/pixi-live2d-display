@@ -182,8 +182,8 @@ export class Live2DModel<IM extends InternalModel = InternalModel> extends Conta
     /**
      * Starts real-time lip sync using the volume and vowel of a playing media element.
      */
-    startLipSync(audio: HTMLMediaElement): void {
-        this.internalModel.startLipSync(audio);
+    startLipSync(audio: HTMLMediaElement, mouthOpenSpeed?: number, mouthFormSpeed?: number, vowelSpeed?: number, volumeSpeed?: number): void {
+        this.internalModel.startLipSync(audio, mouthOpenSpeed, mouthFormSpeed, vowelSpeed, volumeSpeed);
     }
 
     /**

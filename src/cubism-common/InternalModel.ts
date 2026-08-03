@@ -263,8 +263,8 @@ export abstract class InternalModel extends utils.EventEmitter {
         this.focusController.update(dt);
     }
 
-    startLipSync(audio: HTMLMediaElement): void {
-        this.audioAnalyzer.start(audio);
+    startLipSync(audio: HTMLMediaElement, mouthOpenSpeed?: number, mouthFormSpeed?: number, vowelSpeed?: number, volumeSpeed?: number): void {
+        this.audioAnalyzer.start(audio, mouthOpenSpeed, mouthFormSpeed, vowelSpeed, volumeSpeed);
     }
 
     stopLipSync(): void {

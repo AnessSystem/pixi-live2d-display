@@ -40,9 +40,18 @@ export class AudioAnalyzer {
     private mouthForm = 0;
     private f1 = 0;
     private f2 = 0;
+    private mouthOpenSpeed = 0.35;
+    private mouthFormSpeed = 0.35;
+    private vowelSpeed = 0.4;
+    private volumeSpeed = 0.35;
 
-    start(audio: HTMLMediaElement): void {
+    start(audio: HTMLMediaElement, mouthOpenSpeed: number = 0.35, mouthFormSpeed: number = 0.35, vowelSpeed: number = 0.4, volumeSpeed: number = 0.35): void {
         this.stop();
+
+        this.mouthOpenSpeed = mouthOpenSpeed;
+        this.mouthFormSpeed = mouthFormSpeed;
+        this.vowelSpeed = vowelSpeed;
+        this.volumeSpeed = volumeSpeed;
 
         //Web Audio APIコンテキスト作成
         const context = new AudioContext();
@@ -99,7 +108,7 @@ export class AudioAnalyzer {
         const target = Math.max(0, Math.min(1, (rms - 0.01) * 8));
 
         //急な口の動きの変化を防ぐために、現在値を目標音量へ数値分だけ近づける
-        this.volume += (target - this.volume) * 0.35;
+        this.volume += (target - this.volume) * this.volumeSpeed;
 
         let vowel: Vowel | undefined;
 
@@ -113,8 +122,8 @@ export class AudioAnalyzer {
             const nextF2 = this.findPeak(Math.max(700, nextF1 + 350), 3200, binWidth);
 
             //F1とF2を新しい値へ数値分近づける
-            this.f1 += (nextF1 - this.f1) * (this.f1 ? 0.4 : 1);
-            this.f2 += (nextF2 - this.f2) * (this.f2 ? 0.4 : 1);
+            this.f1 += (nextF1 - this.f1) * (this.f1 ? this.vowelSpeed : 1);
+            this.f2 += (nextF2 - this.f2) * (this.f2 ? this.vowelSpeed : 1);
 
             //最も近い母音を判定
             vowel = this.findVowel(this.f1, this.f2);
@@ -131,8 +140,8 @@ export class AudioAnalyzer {
         const targetForm = (shape?.form ?? 0) * strength;
 
         //口の開きと形を目標値へ数値分ずつ近づける（滑らかな口パクの再現）
-        this.mouthOpen += (targetOpen - this.mouthOpen) * 0.35;
-        this.mouthForm += (targetForm - this.mouthForm) * 0.35;
+        this.mouthOpen += (targetOpen - this.mouthOpen) * this.mouthOpenSpeed;
+        this.mouthForm += (targetForm - this.mouthForm) * this.mouthFormSpeed;
 
         //解析結果を返す
         return {
