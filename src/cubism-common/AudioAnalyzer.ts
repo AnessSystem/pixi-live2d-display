@@ -44,6 +44,7 @@ export class AudioAnalyzer {
     private mouthFormSpeed = 0.35;
     private vowelSpeed = 0.4;
     private volumeSpeed = 0.35;
+    private lastUpdateTime = 0;
 
     start(audio: HTMLMediaElement, mouthOpenSpeed: number = 0.35, mouthFormSpeed: number = 0.35, vowelSpeed: number = 0.4, volumeSpeed: number = 0.35): void {
         this.stop();
@@ -79,6 +80,7 @@ export class AudioAnalyzer {
         this.mouthForm = 0;
         this.f1 = 0;
         this.f2 = 0;
+        this.lastUpdateTime = context.currentTime;
 
         if (context.state === "suspended") {
             void context.resume().catch(() => undefined);
@@ -90,6 +92,13 @@ export class AudioAnalyzer {
         if (!this.context || !this.analyser || !this.samples || !this.spectrum) {
             return undefined;
         }
+
+        //60FPS時の速度を基準に、実際の経過時間に合わせて補正
+        const currentTime = this.context.currentTime;
+        const deltaTime = (currentTime - this.lastUpdateTime) * 1000;
+        this.lastUpdateTime = currentTime;
+        const elapsedFrames = Math.max(0, deltaTime / (1000 / 60));
+        const normalizeSpeed = (speed: number) => 1 - Math.pow(1 - speed, elapsedFrames);
 
         //現在の音声波形と周波数スペクトルを書き込む
         this.analyser.getByteTimeDomainData(this.samples);
@@ -108,7 +117,7 @@ export class AudioAnalyzer {
         const target = Math.max(0, Math.min(1, (rms - 0.01) * 8));
 
         //急な口の動きの変化を防ぐために、現在値を目標音量へ数値分だけ近づける
-        this.volume += (target - this.volume) * this.volumeSpeed;
+        this.volume += (target - this.volume) * normalizeSpeed(this.volumeSpeed);
 
         let vowel: Vowel | undefined;
 
@@ -122,8 +131,8 @@ export class AudioAnalyzer {
             const nextF2 = this.findPeak(Math.max(700, nextF1 + 350), 3200, binWidth);
 
             //F1とF2を新しい値へ数値分近づける
-            this.f1 += (nextF1 - this.f1) * (this.f1 ? this.vowelSpeed : 1);
-            this.f2 += (nextF2 - this.f2) * (this.f2 ? this.vowelSpeed : 1);
+            this.f1 += (nextF1 - this.f1) * (this.f1 ? normalizeSpeed(this.vowelSpeed) : 1);
+            this.f2 += (nextF2 - this.f2) * (this.f2 ? normalizeSpeed(this.vowelSpeed) : 1);
 
             //最も近い母音を判定
             vowel = this.findVowel(this.f1, this.f2);
@@ -140,8 +149,8 @@ export class AudioAnalyzer {
         const targetForm = (shape?.form ?? 0) * strength;
 
         //口の開きと形を目標値へ数値分ずつ近づける（滑らかな口パクの再現）
-        this.mouthOpen += (targetOpen - this.mouthOpen) * this.mouthOpenSpeed;
-        this.mouthForm += (targetForm - this.mouthForm) * this.mouthFormSpeed;
+        this.mouthOpen += (targetOpen - this.mouthOpen) * normalizeSpeed(this.mouthOpenSpeed);
+        this.mouthForm += (targetForm - this.mouthForm) * normalizeSpeed(this.mouthFormSpeed);
 
         //解析結果を返す
         return {
@@ -219,5 +228,6 @@ export class AudioAnalyzer {
         this.mouthForm = 0;
         this.f1 = 0;
         this.f2 = 0;
+        this.lastUpdateTime = 0;
     }
 }
