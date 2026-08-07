@@ -60,6 +60,7 @@ class AudioAnalyzer {
     __publicField(this, "mouthFormSpeed", 0.35);
     __publicField(this, "vowelSpeed", 0.4);
     __publicField(this, "volumeSpeed", 0.35);
+    __publicField(this, "lastUpdateTime", 0);
   }
   start(audio, mouthOpenSpeed = 0.35, mouthFormSpeed = 0.35, vowelSpeed = 0.4, volumeSpeed = 0.35) {
     this.stop();
@@ -84,6 +85,7 @@ class AudioAnalyzer {
     this.mouthForm = 0;
     this.f1 = 0;
     this.f2 = 0;
+    this.lastUpdateTime = context.currentTime;
     if (context.state === "suspended") {
       void context.resume().catch(() => void 0);
     }
@@ -94,6 +96,11 @@ class AudioAnalyzer {
     if (!this.context || !this.analyser || !this.samples || !this.spectrum) {
       return void 0;
     }
+    const currentTime = this.context.currentTime;
+    const deltaTime = (currentTime - this.lastUpdateTime) * 1e3;
+    this.lastUpdateTime = currentTime;
+    const elapsedFrames = Math.max(0, deltaTime / (1e3 / 60));
+    const normalizeSpeed = (speed) => 1 - Math.pow(1 - speed, elapsedFrames);
     this.analyser.getByteTimeDomainData(this.samples);
     this.analyser.getByteFrequencyData(this.spectrum);
     let sum = 0;
@@ -103,22 +110,22 @@ class AudioAnalyzer {
     }
     const rms = Math.sqrt(sum / this.samples.length);
     const target = Math.max(0, Math.min(1, (rms - 0.01) * 8));
-    this.volume += (target - this.volume) * this.volumeSpeed;
+    this.volume += (target - this.volume) * normalizeSpeed(this.volumeSpeed);
     let vowel;
     if (rms > 0.015) {
       const binWidth = this.context.sampleRate / this.analyser.fftSize;
       const nextF1 = this.findPeak(250, 1e3, binWidth);
       const nextF2 = this.findPeak(Math.max(700, nextF1 + 350), 3200, binWidth);
-      this.f1 += (nextF1 - this.f1) * (this.f1 ? this.vowelSpeed : 1);
-      this.f2 += (nextF2 - this.f2) * (this.f2 ? this.vowelSpeed : 1);
+      this.f1 += (nextF1 - this.f1) * (this.f1 ? normalizeSpeed(this.vowelSpeed) : 1);
+      this.f2 += (nextF2 - this.f2) * (this.f2 ? normalizeSpeed(this.vowelSpeed) : 1);
       vowel = this.findVowel(this.f1, this.f2);
     }
     const shape = vowel ? vowelProfiles[vowel] : void 0;
     const strength = Math.min(1, this.volume * 2);
     const targetOpen = ((_a = shape == null ? void 0 : shape.open) != null ? _a : 0) * strength;
     const targetForm = ((_b = shape == null ? void 0 : shape.form) != null ? _b : 0) * strength;
-    this.mouthOpen += (targetOpen - this.mouthOpen) * this.mouthOpenSpeed;
-    this.mouthForm += (targetForm - this.mouthForm) * this.mouthFormSpeed;
+    this.mouthOpen += (targetOpen - this.mouthOpen) * normalizeSpeed(this.mouthOpenSpeed);
+    this.mouthForm += (targetForm - this.mouthForm) * normalizeSpeed(this.mouthFormSpeed);
     return {
       volume: this.volume,
       vowel,
@@ -178,6 +185,7 @@ class AudioAnalyzer {
     this.mouthForm = 0;
     this.f1 = 0;
     this.f2 = 0;
+    this.lastUpdateTime = 0;
   }
 }
 var CubismConfig;
