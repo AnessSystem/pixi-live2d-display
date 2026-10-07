@@ -46,7 +46,7 @@ export class AudioAnalyzer {
     private volumeSpeed = 0.35;
     private lastUpdateTime = 0;
 
-    start(audio: HTMLMediaElement, mouthOpenSpeed: number = 0.35, mouthFormSpeed: number = 0.35, vowelSpeed: number = 0.4, volumeSpeed: number = 0.35): void {
+    start(audio: HTMLMediaElement, mouthOpenSpeed: number = 0.35, mouthFormSpeed: number = 0.35, vowelSpeed: number = 0.4, volumeSpeed: number = 0.35, createOutput?: (context: AudioContext) => AudioNode): void {
         this.stop();
 
         this.mouthOpenSpeed = mouthOpenSpeed;
@@ -63,7 +63,7 @@ export class AudioAnalyzer {
         analyser.fftSize = 2048;
         analyser.smoothingTimeConstant = 0.5;
         source.connect(analyser);
-        analyser.connect(context.destination);
+        analyser.connect(createOutput?.(context) ?? context.destination);
 
         //作成した各オブジェクトをクラス内に保持
         this.context = context;
