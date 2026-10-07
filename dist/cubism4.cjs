@@ -7745,7 +7745,8 @@ class AudioAnalyzer {
     __publicField(this, "volumeSpeed", 0.35);
     __publicField(this, "lastUpdateTime", 0);
   }
-  start(audio, mouthOpenSpeed = 0.35, mouthFormSpeed = 0.35, vowelSpeed = 0.4, volumeSpeed = 0.35) {
+  start(audio, mouthOpenSpeed = 0.35, mouthFormSpeed = 0.35, vowelSpeed = 0.4, volumeSpeed = 0.35, createOutput) {
+    var _a;
     this.stop();
     this.mouthOpenSpeed = mouthOpenSpeed;
     this.mouthFormSpeed = mouthFormSpeed;
@@ -7757,7 +7758,7 @@ class AudioAnalyzer {
     analyser.fftSize = 2048;
     analyser.smoothingTimeConstant = 0.5;
     source.connect(analyser);
-    analyser.connect(context.destination);
+    analyser.connect((_a = createOutput == null ? void 0 : createOutput(context)) != null ? _a : context.destination);
     this.context = context;
     this.source = source;
     this.analyser = analyser;
@@ -9079,8 +9080,8 @@ class InternalModel extends core.utils.EventEmitter {
   update(dt, now) {
     this.focusController.update(dt);
   }
-  startLipSync(audio, mouthOpenSpeed, mouthFormSpeed, vowelSpeed, volumeSpeed) {
-    this.audioAnalyzer.start(audio, mouthOpenSpeed, mouthFormSpeed, vowelSpeed, volumeSpeed);
+  startLipSync(audio, mouthOpenSpeed, mouthFormSpeed, vowelSpeed, volumeSpeed, createOutput) {
+    this.audioAnalyzer.start(audio, mouthOpenSpeed, mouthFormSpeed, vowelSpeed, volumeSpeed, createOutput);
   }
   stopLipSync() {
     this.audioAnalyzer.stop();
@@ -10096,8 +10097,8 @@ class Live2DModel extends display.Container {
   /**
    * Starts real-time lip sync using the volume and vowel of a playing media element.
    */
-  startLipSync(audio, mouthOpenSpeed, mouthFormSpeed, vowelSpeed, volumeSpeed) {
-    this.internalModel.startLipSync(audio, mouthOpenSpeed, mouthFormSpeed, vowelSpeed, volumeSpeed);
+  startLipSync(audio, mouthOpenSpeed, mouthFormSpeed, vowelSpeed, volumeSpeed, createOutput) {
+    this.internalModel.startLipSync(audio, mouthOpenSpeed, mouthFormSpeed, vowelSpeed, volumeSpeed, createOutput);
   }
   /**
    * Stops real-time lip sync.
